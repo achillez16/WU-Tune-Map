@@ -11,6 +11,20 @@
         th, td {
             white-space: nowrap;
         }
+        /* Styles for the delete button */
+        .delete-btn {
+            visibility: hidden; /* Hidden by default */
+            cursor: pointer;
+            color: #ef4444; /* Red color */
+            font-weight: bold;
+            font-size: 1.25rem;
+            line-height: 1;
+            padding: 0 0.5rem;
+        }
+        /* Show delete button when hovering over the table row */
+        tr:hover .delete-btn {
+            visibility: visible;
+        }
     </style>
 </head>
 <body class="bg-gray-100 font-sans flex items-center justify-center min-h-screen p-4">
@@ -138,26 +152,70 @@
                 resultRow.push(foundValue);
             }
 
-            // Generate the table HTML
-            const thead = `<thead class="bg-gray-100"><tr>${TARGET_HEADERS.map(h => `<th class="p-3 text-left text-sm font-semibold text-gray-600">${h}</th>`).join('')}</tr></thead>`;
-            const tbody = `<tbody><tr class="border-t border-gray-200">${resultRow.map(d => `<td class="p-3 text-sm text-gray-700">${d}</td>`).join('')}</tr></tbody>`;
+            // --- Step 4: Generate and append table content ---
+            // Check if the table header exists. If not, create it.
+            if (!dataTable.querySelector('thead')) {
+                const thead = document.createElement('thead');
+                thead.className = 'bg-gray-100';
+                // Add an empty header for the delete column
+                thead.innerHTML = `<tr><th class="p-3 w-12"></th>${TARGET_HEADERS.map(h => `<th class="p-3 text-left text-sm font-semibold text-gray-600">${h}</th>`).join('')}</tr>`;
+                dataTable.appendChild(thead);
+                const tbody = document.createElement('tbody');
+                dataTable.appendChild(tbody);
+            }
+
+            // Create the new row and append it to the table body
+            const tbody = dataTable.querySelector('tbody');
+            const newTr = document.createElement('tr');
+            newTr.className = 'border-t border-gray-200 hover:bg-gray-50';
+            // Prepend a cell for the delete button
+            const dataCellsHTML = resultRow.map(d => `<td class="p-3 text-sm text-gray-700">${d}</td>`).join('');
+            newTr.innerHTML = `<td class="p-3 text-center"><span class="delete-btn">&times;</span></td>` + dataCellsHTML;
+            tbody.appendChild(newTr);
             
-            dataTable.innerHTML = thead + tbody;
-            resultsContainer.classList.remove('hidden'); 
+            // Show the results container if it's hidden
+            resultsContainer.classList.remove('hidden');
+
+            // Clear the input text box and update the placeholder
+            textInput.value = '';
+            textInput.placeholder = 'Input more text to add another row to the table.';
         }
+
+        // --- Event Delegation for Delete Buttons ---
+        dataTable.addEventListener('click', function(e) {
+            if (e.target && e.target.classList.contains('delete-btn')) {
+                const row = e.target.closest('tr');
+                row.remove();
+                
+                // If no rows are left in the body, hide the whole results section
+                const tbody = dataTable.querySelector('tbody');
+                if (tbody && tbody.rows.length === 0) {
+                    resultsContainer.classList.add('hidden');
+                    dataTable.innerHTML = ''; // Clear the table completely
+                }
+            }
+        });
 
         // --- Copy to Clipboard Functionality ---
         copyButton.addEventListener('click', () => {
-            let tableText = '';
-            const dataRow = dataTable.querySelector('tbody tr');
-            if(dataRow) {
-                const cols = dataRow.querySelectorAll('td');
-                tableText = Array.from(cols).map(col => col.innerText).join('\t'); 
-            }
+            const allRows = [];
+            const rows = dataTable.querySelectorAll('tbody tr');
+            
+            // Iterate over all rows in the table body
+            rows.forEach(row => {
+                const cols = row.querySelectorAll('td');
+                // Slice(1) to skip the first cell (the delete button)
+                const rowText = Array.from(cols).slice(1).map(col => col.innerText).join('\t'); 
+                allRows.push(rowText);
+            });
+            
+            const tableText = allRows.join('\n');
 
+            // Create a temporary textarea element to hold the text
             const textArea = document.createElement("textarea");
             textArea.value = tableText;
             
+            // Make the textarea invisible
             textArea.style.position = "fixed";
             textArea.style.top = "0";
             textArea.style.left = "0";
@@ -174,6 +232,7 @@
             textArea.select();
 
             try {
+                // Execute the copy command
                 const successful = document.execCommand('copy');
                 if (successful) {
                     copyButton.textContent = 'Copied!';
@@ -186,6 +245,7 @@
                 alert('Failed to copy table. Please try again.');
             }
 
+            // Clean up by removing the temporary textarea
             document.body.removeChild(textArea);
         });
     </script>
