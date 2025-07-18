@@ -141,7 +141,8 @@
             'Symbol', 'Strategy', 'Buy Threshold', 'Sell Threshold', 'Signal Period', 'Fast Period', 'Slow Period', 'Alpha', 'Beta',
             'Norm. Returns', 'Hit Rate', '# of Trades', 'Returns Multiplier', '# of Trades Variation', 'Hit Rate',
             'B&H Returns', 'Strategy Returns', 'Hysteresis Returns', 'Avg Win', 'Avg Loss', 'Avg Win/Loss',
-            'B&H Period', 'Strategy Period', 'B&H Drawdown', 'Max Single Trade DD', 'Avg Win/Med Win'
+            'B&H Period', 'Strategy Period', 'B&H Drawdown', 
+            'Max Single Trade DD', 'Avg Win/Med Win'
         ];
 
         // --- Page Navigation ---
@@ -175,51 +176,63 @@
             const parsedPairs = [];
             const lines = text.split('\n').map(line => line.trim()).filter(line => line && !['Parameters', 'Statistics'].includes(line));
 
+            // --- Step 1: Parse all key-value pairs from the text ---
             for (let i = 0; i < lines.length; i++) {
                 const line = lines[i];
                 const singleLineMatch = line.match(/^([^:]+):\s*(.+)$/);
                 if (singleLineMatch) {
                     parsedPairs.push([singleLineMatch[1].trim(), singleLineMatch[2].trim()]);
-                    continue;
-                }
-
-                if (line.endsWith(':')) {
+                } else if (line.endsWith(':')) {
                     const key = line.slice(0, -1).trim();
                     const nextLine = lines[i + 1];
                     if (nextLine && !nextLine.includes(':')) {
                         parsedPairs.push([key, nextLine]);
-                        i++;
+                        i++; 
                     } else {
                         parsedPairs.push([key, '']);
                     }
                 }
             }
-
-            const resultRow = [];
-            const usedIndexes = new Set(); 
+            
+            // --- Step 2: Create a map of normalized keys to an array of their values ---
             const normalizeKey = (key) => key.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const dataMap = new Map();
+            for (const [key, value] of parsedPairs) {
+                const normalizedKey = normalizeKey(key);
+                if (!dataMap.has(normalizedKey)) {
+                    dataMap.set(normalizedKey, []);
+                }
+                dataMap.get(normalizedKey).push(value);
+            }
+
+            // --- Step 3: Build the final result row by matching headers in order ---
+            const resultRow = [];
+            const headerCount = new Map();
 
             for (const targetHeader of TARGET_HEADERS) {
-                let foundValue = '';
                 const normalizedTarget = normalizeKey(targetHeader);
-
-                for (let i = 0; i < parsedPairs.length; i++) {
-                    if (usedIndexes.has(i)) continue;
-                    const [parsedKey, parsedValue] = parsedPairs[i];
-                    if (normalizeKey(parsedKey) === normalizedTarget) {
-                        foundValue = parsedValue;
-                        usedIndexes.add(i); 
-                        break; 
-                    }
-                }
+                const count = headerCount.get(normalizedTarget) || 0;
                 
+                const values = dataMap.get(normalizedTarget);
+                let foundValue = (values && values.length > count) ? values[count] : '';
+
+                headerCount.set(normalizedTarget, count + 1);
+                
+                // Special formatting rules
                 if (targetHeader === 'Symbol' && foundValue) {
                     foundValue = foundValue.toUpperCase();
+                }
+                
+                // Special handling to extract only numbers for Period columns
+                if ((targetHeader.includes('B&H Period') || targetHeader.includes('Strategy Period')) && foundValue) {
+                    const numberMatch = foundValue.match(/[\d.]+/); // Extract numbers and decimals
+                    foundValue = numberMatch ? numberMatch[0] : '';
                 }
                 
                 resultRow.push(foundValue);
             }
 
+            // --- Step 4: Generate and append table content ---
             if (!dataTable.querySelector('thead')) {
                 const thead = document.createElement('thead');
                 thead.className = 'bg-gray-100';
@@ -297,6 +310,7 @@
                 console.error('Failed to copy text: ', err);
                 alert('Failed to copy table. Please try again.');
             }
+
             document.body.removeChild(textArea);
         });
     </script>
