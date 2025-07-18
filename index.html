@@ -60,7 +60,7 @@
 
         // --- Predefined Table Headers ---
         const TARGET_HEADERS = [
-            'Symbol', 'Strategy', 'Signal Period', 'Fast Period', 'Slow Period', 'Alpha', 'Beta',
+            'Symbol', 'Strategy', 'Buy Threshold', 'Sell Threshold', 'Signal Period', 'Fast Period', 'Slow Period', 'Alpha', 'Beta',
             'Norm. Returns', 'Hit Rate', '# of Trades', 'Returns Multiplier', '# of Trades Variation', 'Hit Rate',
             'B&H Returns', 'Strategy Returns', 'Hysteresis Returns', 'Avg Win', 'Avg Loss', 'Avg Win/Loss',
             'B&H Period', 'Strategy Period', 'B&H Drawdown', 'Max Single Trade DD', 'Avg Win/Med Win'
@@ -83,29 +83,31 @@
         function parseTextAndDisplayTable(text) {
             // This array will store all found [key, value] pairs in the order they appear.
             const parsedPairs = [];
-            const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+            const lines = text.split('\n').map(line => line.trim()).filter(line => line && !['Parameters', 'Statistics'].includes(line));
 
-            // --- Step 1: Handle multi-line key/value pairs ---
-            for (let i = 0; i < lines.length - 1; i++) {
-                const currentLine = lines[i];
-                if (currentLine.endsWith(':')) {
-                    const key = currentLine.slice(0, -1).trim();
-                    const value = lines[i + 1];
-                    if (value && !value.endsWith(':') && value.toLowerCase() !== 'parameters' && value.toLowerCase() !== 'statistics') {
-                        parsedPairs.push([key, value]);
-                    }
+            // --- New, more robust parsing logic ---
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                
+                // Case 1: "Key: Value" on the same line
+                const singleLineMatch = line.match(/^([^:]+):\s*(.+)$/);
+                if (singleLineMatch) {
+                    parsedPairs.push([singleLineMatch[1].trim(), singleLineMatch[2].trim()]);
+                    continue;
                 }
-            }
 
-            // --- Step 2: Handle single-line "Key: Value" pairs ---
-            const singleLineRegex = /([a-zA-Z\s\.\/#]+?):\s*([^\n:]+)/g;
-            let match;
-            while ((match = singleLineRegex.exec(text)) !== null) {
-                const key = match[1].trim();
-                const value = match[2].trim();
-                const alreadyExists = parsedPairs.some(p => p[0] === key);
-                if (!alreadyExists) {
-                    parsedPairs.push([key, value]);
+                // Case 2: "Key:" on one line, "Value" on the next
+                if (line.endsWith(':')) {
+                    const key = line.slice(0, -1).trim();
+                    const nextLine = lines[i + 1];
+                    
+                    if (nextLine && !nextLine.includes(':')) {
+                        parsedPairs.push([key, nextLine]);
+                        i++; // Skip the next line since we've consumed it as a value
+                    } else {
+                        // Key has no value on the next line
+                        parsedPairs.push([key, '']);
+                    }
                 }
             }
 
